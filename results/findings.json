@@ -1,0 +1,55 @@
+{
+  "latest_cpi_month": "September 2026",
+  "base": "January 2020",
+  "food_change_since_base_pct": 38.3,
+  "all_items_change_since_base_pct": 33.2,
+  "fastest_category": {
+    "name": "Oils & fats",
+    "pct": 73.8
+  },
+  "slowest_category": {
+    "name": "Fruit",
+    "pct": 25.9
+  },
+  "category_change_since_base": {
+    "Oils & fats": 73.8,
+    "Sauces & ready meals": 55.2,
+    "Milk, cheese & eggs": 45.5,
+    "Sugar & sweets": 43.4,
+    "Food (all)": 38.3,
+    "Bread & cereals": 38.0,
+    "Vegetables": 36.4,
+    "Meat": 35.2,
+    "All items": 33.2,
+    "Fish": 27.5,
+    "Fruit": 25.9
+  },
+  "food_yoy_latest_pct": 1.2,
+  "food_yoy_peak": {
+    "month": "March 2023",
+    "pct": 19.6
+  },
+  "pay_years": "April 2020 to April 2025",
+  "food_inflation_same_period_pct": 34.4,
+  "cpi_inflation_same_period_pct": 27.4,
+  "uk_nominal_pay_change_pct": 30.9,
+  "uk_real_vs_food_pct": -2.6,
+  "weakest_region": {
+    "name": "London",
+    "nominal_pay_change_pct": 26.4,
+    "real_vs_food_pct": -6.0,
+    "real_vs_cpi_pct": -0.8,
+    "pay_2020": 714.3,
+    "pay_2025": 902.7
+  },
+  "strongest_region": {
+    "name": "Northern Ireland",
+    "nominal_pay_change_pct": 35.4,
+    "real_vs_food_pct": 0.7,
+    "real_vs_cpi_pct": 6.3,
+    "pay_2020": 528.6,
+    "pay_2025": 715.6
+  },
+  "regions_behind_food": 11,
+  "regions_total": 12
+}

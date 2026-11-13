@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UK Cost of Living</title>
+<!-- HTML preview of the two-page Power BI report. Same model, same measures (see powerbi/measures.dax). -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="data.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f3ef; --surface: #fcfcfb; --border: #e4e3de; --grid: #ecebe7;
+  --ink: #0b0b0b; --ink2: #52514e; --ink3: #8a8984;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --neutral: #8a8984;
+  --bad: #c43d3c; --good: #1d7f3a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111110; --surface: #1a1a19; --border: #2e2e2c; --grid: #262624;
+    --ink: #f0efec; --ink2: #c3c2b7; --ink3: #8f8e86;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --neutral: #8f8e86;
+    --bad: #e66767; --good: #4cb36b;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111110; --surface: #1a1a19; --border: #2e2e2c; --grid: #262624;
+  --ink: #f0efec; --ink2: #c3c2b7; --ink3: #8f8e86;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --neutral: #8f8e86;
+  --bad: #e66767; --good: #4cb36b;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 20px 16px 40px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; margin-bottom: 16px; }
+h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+.sub { color: var(--ink2); font-size: 13px; }
+.tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+.tabs button { border: 0; background: none; color: var(--ink2); padding: 6px 14px; border-radius: 6px; font: inherit; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--ink); color: var(--surface); }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.kpi .label { color: var(--ink2); font-size: 12.5px; }
+.kpi .value { font-size: 30px; font-weight: 650; letter-spacing: -0.02em; margin: 2px 0; font-variant-numeric: tabular-nums; }
+.kpi .note { color: var(--ink3); font-size: 12px; }
+.card h2 { font-size: 14px; margin: 0 0 2px; }
+.card .desc { color: var(--ink2); font-size: 12.5px; margin: 0 0 10px; }
+.chart { position: relative; height: 340px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.filters { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end; margin-bottom: 12px; }
+.filters label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink2); }
+select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; min-width: 180px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--border); background: var(--surface); color: var(--ink2); border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.chip[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); font-weight: 600; }
+.chip .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.foot { color: var(--ink3); font-size: 12px; margin-top: 14px; }
+.hidden { display: none; }
+@media (max-width: 860px) { .kpis { grid-template-columns: 1fr 1fr; } .grid2 { grid-template-columns: 1fr; } }
+@media (max-width: 460px) { .kpis { grid-template-columns: 1fr; } .chart { height: 280px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>UK cost of living: food prices vs pay</h1>
+      <div class="sub" id="subtitle"></div>
+    </div>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-page="p1">Summary</button>
+      <button role="tab" aria-selected="false" data-page="p2">Drill-down</button>
+    </div>
+  </header>
+
+  <section id="p1">
+    <div class="kpis" id="kpis"></div>
+    <div class="card">
+      <h2 id="headline-title"></h2>
+      <p class="desc">Consumer price index, January 2020 = 100. Monthly, ONS.</p>
+      <div class="chart"><canvas id="c-headline"></canvas></div>
+    </div>
+  </section>
+
+  <section id="p2" class="hidden">
+    <div class="filters card">
+      <label>Food categories
+        <div class="chips" id="cat-chips"></div>
+      </label>
+      <label>Region
+        <select id="region"></select>
+      </label>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h2>Price index by category</h2>
+        <p class="desc">January 2020 = 100. Select up to 3 categories.</p>
+        <div class="chart"><canvas id="c-cats"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Change since January 2020, all food categories</h2>
+        <p class="desc">Selected categories highlighted. Dashed line: all-items CPI.</p>
+        <div class="chart"><canvas id="c-rank"></canvas></div>
+      </div>
+      <div class="card">
+        <h2 id="rw-title">Real wage index</h2>
+        <p class="desc">Median full-time weekly pay ÷ food prices, April each year, 2020 = 100. Below 100: a week's pay buys less food than in 2020.</p>
+        <div class="chart"><canvas id="c-real"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Pay vs food prices by region, 2020 to latest</h2>
+        <p class="desc">Real change in median weekly pay after food inflation. Selected region highlighted.</p>
+        <div class="chart"><canvas id="c-regions"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <p class="foot">Sources: ONS Consumer price inflation (mm23) and Annual Survey of Hours and Earnings (Nomis NM_30_1), Open Government Licence v3.0. CPI is UK-wide, so every region is deflated by the same food index.</p>
+</div>
+
+<script>
+const D = window.DASH, F = D.findings;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const pct = (v, d = 1) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(d) + "%";
+let charts = {};
+
+document.getElementById("subtitle").textContent =
+  `Prices to ${F.latest_cpi_month} · Pay ${F.pay_years}`;
+
+// ---------- KPI cards ----------
+document.getElementById("kpis").innerHTML = [
+  ["Food prices since Jan 2020", pct(F.food_change_since_base_pct), `vs ${pct(F.all_items_change_since_base_pct)} for all items`],
+  ["Fastest-rising food category", pct(F.fastest_category.pct, 0), F.fastest_category.name],
+  ["UK pay after food prices", pct(F.uk_real_vs_food_pct), `Pay ${pct(F.uk_nominal_pay_change_pct)}, food ${pct(F.food_inflation_same_period_pct)}`],
+  ["Region furthest behind", pct(F.weakest_region.real_vs_food_pct), `${F.weakest_region.name} · ${F.regions_behind_food} of ${F.regions_total} regions behind`],
+].map(([l, v, n]) => `<div class="card kpi"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${n}</div></div>`).join("");
+document.getElementById("headline-title").textContent =
+  `Food prices rose ${F.food_change_since_base_pct.toFixed(0)}% since January 2020, faster than prices overall (${F.all_items_change_since_base_pct.toFixed(0)}%)`;
+
+// ---------- helpers ----------
+function rebased(name, from = "2019-01") {
+  const s = D.series[name], base = s.find(p => p[0] === "2020-01")[1];
+  return s.filter(p => p[0] >= from).map(p => ({ x: p[0], y: +(p[1] / base * 100).toFixed(1) }));
+}
+const changeSinceBase = name => { const s = D.series[name]; const b = s.find(p => p[0] === "2020-01")[1]; return (s[s.length - 1][1] / b - 1) * 100; };
+const foodCats = D.categories.filter(c => !["All items", "Food (all)"].includes(c));
+const lastPayYear = Math.max(...Object.keys(D.pay["United Kingdom"]).map(Number));
+const realIdx = r => Object.keys(D.pay[r]).map(Number).filter(y => y >= 2019).map(y => ({
+  x: String(y), y: +((D.pay[r][y] / D.pay[r][2020]) / (D.food_april[y] / D.food_april[2020]) * 100).toFixed(1) }));
+const realChange = r => ((D.pay[r][lastPayYear] / D.pay[r][2020]) / (D.food_april[lastPayYear] / D.food_april[2020]) - 1) * 100;
+
+function baseOpts(extra = {}) {
+  const grid = css("--grid"), ink2 = css("--ink2");
+  return Object.assign({
+    responsive: true, maintainAspectRatio: false, animation: false,
+    interaction: { mode: "index", intersect: false },
+    plugins: { legend: { labels: { color: ink2, boxWidth: 10, boxHeight: 10, usePointStyle: true } },
+               tooltip: { backgroundColor: css("--surface"), titleColor: css("--ink"), bodyColor: ink2,
+                          borderColor: css("--border"), borderWidth: 1, padding: 10 } },
+    scales: { x: { grid: { display: false }, ticks: { color: ink2, maxTicksLimit: 8 }, border: { color: css("--border") } },
+              y: { grid: { color: grid }, ticks: { color: ink2 }, border: { display: false } } },
+  }, extra);
+}
+const line = (label, data, color, dash) => ({ label, data, borderColor: color, backgroundColor: color, borderWidth: 2,
+  borderDash: dash || [], pointRadius: 0, pointHoverRadius: 4, tension: 0 });
+function make(id, cfg) { charts[id]?.destroy(); charts[id] = new Chart(document.getElementById(id), cfg); }
+
+// ---------- state ----------
+let selCats = ["Oils & fats", "Milk, cheese & eggs", "Fruit"];
+let selRegion = F.weakest_region.name;
+const slotColor = i => [css("--s1"), css("--s2"), css("--s3")][i];
+
+const chipBox = document.getElementById("cat-chips");
+function renderChips() {
+  chipBox.innerHTML = foodCats.map(c => {
+    const i = selCats.indexOf(c);
+    return `<button class="chip" aria-pressed="${i >= 0}" data-cat="${c}">${i >= 0 ? `<span class="dot" style="background:${slotColor(i)}"></span>` : ""}${c}</button>`;
+  }).join("");
+}
+chipBox.addEventListener("click", e => {
+  const c = e.target.closest(".chip")?.dataset.cat; if (!c) return;
+  if (selCats.includes(c)) { if (selCats.length > 1) selCats = selCats.filter(x => x !== c); }
+  else { selCats = [...selCats, c].slice(-3); }
+  renderAll();
+});
+const regionSel = document.getElementById("region");
+regionSel.innerHTML = D.regions.filter(r => r !== "United Kingdom").map(r => `<option ${r === selRegion ? "selected" : ""}>${r}</option>`).join("");
+regionSel.addEventListener("change", e => { selRegion = e.target.value; renderAll(); });
+
+// ---------- render ----------
+function renderAll() {
+  const ink2 = css("--ink2"), neutral = css("--neutral");
+  renderChips();
+
+  make("c-headline", { type: "line", data: { datasets: [
+      line("Food", rebased("Food (all)"), css("--s2")),
+      line("All items CPI", rebased("All items"), css("--s1")) ] },
+    options: baseOpts({ parsing: true, scales: { ...baseOpts().scales, x: { ...baseOpts().scales.x, type: "category" } } }) });
+
+  make("c-cats", { type: "line", data: { datasets: [
+      ...selCats.map((c, i) => line(c, rebased(c, "2020-01"), slotColor(i))),
+      line("All items CPI", rebased("All items", "2020-01"), neutral, [4, 4]) ] }, options: baseOpts() });
+
+  const ranked = foodCats.map(c => [c, changeSinceBase(c)]).sort((a, b) => b[1] - a[1]);
+  const cpiChange = changeSinceBase("All items");
+  make("c-rank", { type: "bar",
+    data: { labels: ranked.map(r => r[0]), datasets: [{ label: "Change since Jan 2020",
+      data: ranked.map(r => +r[1].toFixed(1)),
+      backgroundColor: ranked.map(r => selCats.includes(r[0]) ? slotColor(selCats.indexOf(r[0])) : neutral),
+      borderRadius: 4, barPercentage: 0.7, categoryPercentage: 0.9 }] },
+    options: baseOpts({ indexAxis: "y", interaction: { mode: "nearest", intersect: true },
+      plugins: { ...baseOpts().plugins, legend: { display: false },
+        tooltip: { ...baseOpts().plugins.tooltip, callbacks: { label: c => ` ${pct(c.raw)} since Jan 2020` } } },
+      scales: { x: { grid: { color: css("--grid") }, ticks: { color: ink2, callback: v => v + "%" }, border: { display: false } },
+                y: { grid: { display: false }, ticks: { color: ink2 }, border: { color: css("--border") } } } }),
+    plugins: [{ id: "cpiLine", afterDatasetsDraw(ch) {
+      const x = ch.scales.x.getPixelForValue(cpiChange), { top, bottom } = ch.chartArea, ctx = ch.ctx;
+      ctx.save(); ctx.strokeStyle = css("--ink2"); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke(); ctx.restore(); } }] });
+
+  document.getElementById("rw-title").textContent = `Real wage index: ${selRegion} vs UK`;
+  make("c-real", { type: "line", data: { datasets: [
+      { ...line(selRegion, realIdx(selRegion), css("--s1")), pointRadius: 4 },
+      { ...line("United Kingdom", realIdx("United Kingdom"), neutral, [4, 4]), pointRadius: 3 } ] },
+    options: baseOpts() });
+
+  const regs = D.regions.filter(r => r !== "United Kingdom").map(r => [r, realChange(r)]).sort((a, b) => a[1] - b[1]);
+  make("c-regions", { type: "bar",
+    data: { labels: regs.map(r => r[0]), datasets: [{ label: "Real pay change vs food",
+      data: regs.map(r => +r[1].toFixed(1)),
+      backgroundColor: regs.map(r => r[0] === selRegion ? css("--s1") : neutral),
+      borderRadius: 4, barPercentage: 0.7, categoryPercentage: 0.9 }] },
+    options: baseOpts({ indexAxis: "y", interaction: { mode: "nearest", intersect: true },
+      plugins: { ...baseOpts().plugins, legend: { display: false },
+        tooltip: { ...baseOpts().plugins.tooltip, callbacks: { label: c => ` ${pct(c.raw)} real, 2020–${lastPayYear}` } } },
+      scales: { x: { grid: { color: css("--grid") }, ticks: { color: ink2, callback: v => v + "%" }, border: { display: false } },
+                y: { grid: { display: false }, ticks: { color: ink2 }, border: { color: css("--border") } } },
+      onClick: (e, els) => { if (els.length) { selRegion = regs[els[0].index][0]; regionSel.value = selRegion; renderAll(); } } }) });
+}
+
+// ---------- tabs ----------
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
+  ["p1", "p2"].forEach(p => document.getElementById(p).classList.toggle("hidden", p !== b.dataset.page));
+  renderAll();
+}));
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderAll);
+renderAll();
+if (location.hash === "#drill") document.querySelector('[data-page="p2"]').click();
+</script>
+</body>
+</html>

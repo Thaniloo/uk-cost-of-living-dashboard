@@ -1,0 +1,122 @@
+// =====================================================================
+//  UK cost-of-living dashboard: DAX measures
+//  Model: FactPrices[date_key] -> DimDate[date_key], FactPrices[category_key] -> DimCategory
+//         FactPay[date_key]    -> DimDate[date_key], FactPay[region_key]      -> DimRegion
+//  All relationships are many-to-one and single direction. DimDate is marked as the date table.
+//  Store these in a dedicated _Measures table, in display folders as shown.
+// =====================================================================
+
+// ---------- Parameter table (Modeling > New parameter > Numeric range, 2015-2025) ----------
+// Base Year = GENERATESERIES(2015, 2025, 1)       -- column renamed to [Base Year]
+Base Year Value = SELECTEDVALUE ( 'Base Year'[Base Year], 2020 )
+
+
+// ======================== Prices ========================
+// Folder: Prices
+
+Price Index =
+    AVERAGE ( FactPrices[index_value] )                       // 2015 = 100, ONS published index
+
+Latest Month Index =                                          // last month with data in the current filter
+    VAR LastMonth = CALCULATE ( MAX ( DimDate[month_index] ), FactPrices )
+    RETURN CALCULATE ( [Price Index], REMOVEFILTERS ( DimDate ), DimDate[month_index] = LastMonth )
+
+Price YoY % =
+    // Year-on-year change. Uses the month counter, not DATEADD, because DimDate is monthly.
+    VAR ThisMonth = MAX ( DimDate[month_index] )
+    VAR Curr      = CALCULATE ( [Price Index], REMOVEFILTERS ( DimDate ), DimDate[month_index] = ThisMonth )
+    VAR Prev      = CALCULATE ( [Price Index], REMOVEFILTERS ( DimDate ), DimDate[month_index] = ThisMonth - 12 )
+    RETURN DIVIDE ( Curr - Prev, Prev )
+
+Base Month Index =                                            // January of the chosen base year
+    CALCULATE ( [Price Index], REMOVEFILTERS ( DimDate ),
+                DimDate[year] = [Base Year Value], DimDate[month_number] = 1 )
+
+Price Change Since Base % =                                   // cumulative change, base -> month in context
+    DIVIDE ( [Price Index] - [Base Month Index], [Base Month Index] )
+
+Price Change Since Base (Latest) % =                          // for KPI cards and the category ranking bar
+    DIVIDE ( [Latest Month Index] - [Base Month Index], [Base Month Index] )
+
+Rebased Index =                                               // line charts: base month = 100
+    DIVIDE ( [Price Index], [Base Month Index] ) * 100
+
+Food Change Since Base % =
+    CALCULATE ( [Price Change Since Base (Latest) %], REMOVEFILTERS ( DimCategory ), DimCategory[cdid] = "D7C8" )
+
+CPI Change Since Base % =
+    CALCULATE ( [Price Change Since Base (Latest) %], REMOVEFILTERS ( DimCategory ), DimCategory[cdid] = "D7BT" )
+
+Fastest Rising Category =
+    VAR Ranked =
+        TOPN ( 1,
+            CALCULATETABLE ( VALUES ( DimCategory[category_short] ), DimCategory[category_group] = "Food class" ),
+            [Price Change Since Base (Latest) %], DESC )
+    RETURN MAXX ( Ranked, DimCategory[category_short] )
+
+Fastest Rising Category % =
+    MAXX (
+        CALCULATETABLE ( VALUES ( DimCategory[category_short] ), DimCategory[category_group] = "Food class" ),
+        [Price Change Since Base (Latest) %] )
+
+
+// ======================== Pay ========================
+// Folder: Pay
+
+Median Weekly Pay =
+    AVERAGE ( FactPay[median_weekly_pay] )                    // one region in context: its median
+
+Base Year Pay =
+    CALCULATE ( [Median Weekly Pay], REMOVEFILTERS ( DimDate ), DimDate[year] = [Base Year Value] )
+
+Latest Pay Year =
+    CALCULATE ( MAX ( DimDate[year] ), FactPay )
+
+Latest Pay =
+    CALCULATE ( [Median Weekly Pay], REMOVEFILTERS ( DimDate ), DimDate[year] = [Latest Pay Year] )
+
+Pay Change Since Base % =
+    DIVIDE ( [Latest Pay] - [Base Year Pay], [Base Year Pay] )
+
+
+// ======================== Real wages ========================
+// Folder: Real wages
+// ASHE measures pay in April, so pay is compared with the April food index of the same year.
+// CPI is UK-wide (ONS publishes no regional CPI), so every region is deflated by the same index.
+
+Food Index (April) =
+    CALCULATE ( [Price Index],
+        REMOVEFILTERS ( DimCategory ), DimCategory[cdid] = "D7C8",
+        DimDate[month_number] = 4 )
+
+Food Index Change to Latest Pay Year % =
+    VAR B = CALCULATE ( [Food Index (April)], REMOVEFILTERS ( DimDate ), DimDate[year] = [Base Year Value], DimDate[month_number] = 4 )
+    VAR L = CALCULATE ( [Food Index (April)], REMOVEFILTERS ( DimDate ), DimDate[year] = [Latest Pay Year], DimDate[month_number] = 4 )
+    RETURN DIVIDE ( L - B, B )
+
+Real Wage Index =
+    // Pay ÷ food prices, base year = 100. Below 100 means a week's pay buys less food than in the base year.
+    VAR PayIdx  = DIVIDE ( [Median Weekly Pay], [Base Year Pay] )
+    VAR FoodIdx = DIVIDE ( [Food Index (April)],
+                           CALCULATE ( [Food Index (April)], REMOVEFILTERS ( DimDate ), DimDate[year] = [Base Year Value], DimDate[month_number] = 4 ) )
+    RETURN DIVIDE ( PayIdx, FoodIdx ) * 100
+
+Real Pay Change vs Food % =
+    ( 1 + [Pay Change Since Base %] ) / ( 1 + [Food Index Change to Latest Pay Year %] ) - 1
+
+Weakest Region =
+    VAR Ranked = TOPN ( 1, CALCULATETABLE ( VALUES ( DimRegion[region] ), DimRegion[is_uk_total] = FALSE ),
+                        [Real Pay Change vs Food %], ASC )
+    RETURN MAXX ( Ranked, DimRegion[region] )
+
+Weakest Region % =
+    MINX ( CALCULATETABLE ( VALUES ( DimRegion[region] ), DimRegion[is_uk_total] = FALSE ), [Real Pay Change vs Food %] )
+
+Regions Behind Food Prices =
+    COUNTROWS ( FILTER ( CALCULATETABLE ( VALUES ( DimRegion[region] ), DimRegion[is_uk_total] = FALSE ),
+                         [Real Pay Change vs Food %] < 0 ) )
+
+
+// ======================== Formatting helpers ========================
+KPI Subtitle Food =
+    "Jan " & [Base Year Value] & " to " & FORMAT ( CALCULATE ( MAX ( DimDate[date] ), FactPrices ), "mmm yyyy" )
